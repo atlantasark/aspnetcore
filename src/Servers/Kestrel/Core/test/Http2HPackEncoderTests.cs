@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http.HPack;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -411,8 +412,15 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
             enumerator.Initialize(new Dictionary<string, StringValues>());
             Assert.True(hpackEncoder.BeginEncodeHeaders(enumerator, buffer, out var length));
 
-            Assert.Equal(1, length);
-            Assert.Equal(0x21, buffer[0]);
+            Assert.Equal(2, length);
+
+            const byte DynamicTableSizeUpdateMask = 0xe0;
+
+            var integerDecoder = new IntegerDecoder();
+            Assert.False(integerDecoder.BeginTryDecode((byte)(buffer[0] & ~DynamicTableSizeUpdateMask), prefixLength: 5, out _));
+            Assert.True(integerDecoder.TryDecode(buffer[1], out var result));
+
+            Assert.Equal(100, result);
 
             // Second request
             enumerator.Initialize(new Dictionary<string, StringValues>());

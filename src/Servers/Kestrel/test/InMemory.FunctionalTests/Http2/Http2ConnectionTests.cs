@@ -1873,6 +1873,40 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
         }
 
         [Fact]
+        public async Task HEADERS_HeaderTableSizeLimitZero_Received_DynamicTableUpdate()
+        {
+            _serviceContext.ServerOptions.Limits.Http2.HeaderTableSize = 0;
+
+            await InitializeConnectionAsync(_noopApplication, expectedSettingsCount: 4);
+
+            await StartStreamAsync(1, _browserRequestHeaders, endStream: true);
+
+            _hpackEncoder.UpdateMaxHeaderTableSize(0);
+
+            var headerFrame = await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 38,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS | Http2HeadersFrameFlags.END_STREAM),
+                withStreamId: 1);
+
+            const byte DynamicTableSizeUpdateMask = 0xe0;
+
+            var integerDecoder = new IntegerDecoder();
+            Assert.True(integerDecoder.BeginTryDecode((byte)(headerFrame.Payload.Span[0] & ~DynamicTableSizeUpdateMask), prefixLength: 5, out var result));
+
+            // Dynamic table update from the server
+            Assert.Equal(0, result);
+
+            await StartStreamAsync(3, _browserRequestHeaders, endStream: true);
+
+            await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 37,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS | Http2HeadersFrameFlags.END_STREAM),
+                withStreamId: 3);
+
+            await StopConnectionAsync(expectedLastStreamId: 3, ignoreNonGoAwayFrames: false);
+        }
+
+        [Fact]
         public async Task HEADERS_OverMaxStreamLimit_Refused()
         {
             CreateConnection();
@@ -2886,6 +2920,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
         {
             CreateConnection();
 
+            _connection.ServerSettings.HeaderTableSize = 0;
             _connection.ServerSettings.MaxConcurrentStreams = 1;
             _connection.ServerSettings.MaxHeaderListSize = 4 * 1024;
             _connection.ServerSettings.InitialWindowSize = 1024 * 1024 * 10;
@@ -2896,23 +2931,27 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
             await SendSettingsAsync();
 
             var frame = await ExpectAsync(Http2FrameType.SETTINGS,
-                withLength: Http2FrameReader.SettingSize * 3,
+                withLength: Http2FrameReader.SettingSize * 4,
                 withFlags: 0,
                 withStreamId: 0);
 
             // Only non protocol defaults are sent
             var settings = Http2FrameReader.ReadSettings(frame.PayloadSequence);
-            Assert.Equal(3, settings.Count);
+            Assert.Equal(4, settings.Count);
 
             var setting = settings[0];
+            Assert.Equal(Http2SettingsParameter.SETTINGS_HEADER_TABLE_SIZE, setting.Parameter);
+            Assert.Equal(0u, setting.Value);
+
+            setting = settings[1];
             Assert.Equal(Http2SettingsParameter.SETTINGS_MAX_CONCURRENT_STREAMS, setting.Parameter);
             Assert.Equal(1u, setting.Value);
 
-            setting = settings[1];
+            setting = settings[2];
             Assert.Equal(Http2SettingsParameter.SETTINGS_INITIAL_WINDOW_SIZE, setting.Parameter);
             Assert.Equal(1024 * 1024 * 10u, setting.Value);
 
-            setting = settings[2];
+            setting = settings[3];
             Assert.Equal(Http2SettingsParameter.SETTINGS_MAX_HEADER_LIST_SIZE, setting.Parameter);
             Assert.Equal(4 * 1024u, setting.Value);
 

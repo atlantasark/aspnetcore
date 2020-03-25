@@ -102,7 +102,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http2.HPack
 
             if (_pendingTableSizeUpdate)
             {
-                if (!HPackEncoder.EncodeDynamicTableSizeUpdate(1, buffer, out var sizeUpdateLength))
+                if (!HPackEncoder.EncodeDynamicTableSizeUpdate((int)_maxHeaderTableSize, buffer, out var sizeUpdateLength))
                 {
                     throw new HPackEncodingException(SR.net_http_hpack_encode_failure);
                 }
