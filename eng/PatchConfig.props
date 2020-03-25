@@ -55,5 +55,13 @@ Later on, this will be checked using this condition:
       Microsoft.AspNetCore.Authentication.Cookies;
       Microsoft.AspNetCore.Mvc.Core;
     </PackagesInPatch>
+  <PropertyGroup Condition=" '$(VersionPrefix)' == '2.1.17' ">
+    <PackagesInPatch>
+    </PackagesInPatch>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(VersionPrefix)' == '2.1.18' ">
+    <PackagesInPatch>
+    </PackagesInPatch>
+  </PropertyGroup>
   </PropertyGroup>
 </Project>
